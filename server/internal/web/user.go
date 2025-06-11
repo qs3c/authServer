@@ -3,10 +3,13 @@ package web
 import (
 	"authServer/server/internal/domain"
 	"authServer/server/internal/service"
+	"errors"
 	"fmt"
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"net/http"
+	"strconv"
 )
 
 const (
@@ -137,24 +140,43 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 func (h *UserHandler) InitAuthTimes(ctx *gin.Context) {
 	// 1.使用权限校验
 	type Req struct {
-		AuthKey            string `json:"auth_key"`
-		Email              string `json:"email"`
-		Auth_hide_times    int    `json:"auth_hide_times"`
-		Auth_extract_times int    `json:"auth_extract_times"`
+		AuthKey          string `json:"auth_key"`
+		Email            string `json:"email"`
+		AuthHideTimes    string `json:"auth_hide_times"`
+		AuthExtractTimes string `json:"auth_extract_times"`
 	}
+
 	var req Req
 	if err := ctx.Bind(&req); err != nil {
+		fmt.Println("bind failed!")
+		return
+	}
+	AuthHideTimes, err := strconv.Atoi(req.AuthHideTimes)
+	if err != nil {
+		ctx.String(http.StatusOK, "输入授权次数违规")
 		return
 	}
 
+	AuthExtractTimes, err := strconv.Atoi(req.AuthExtractTimes)
+	if err != nil {
+		ctx.String(http.StatusOK, "输入授权次数违规")
+		return
+	}
+
+	fmt.Println(req.Email, AuthHideTimes, AuthExtractTimes)
 	// 2.
 	if req.AuthKey != authKey {
+		ctx.String(http.StatusOK, "授权密钥错误!")
 		return
 	}
 
-	err := h.svc.Init_auth_times(ctx, req.Email, req.Auth_hide_times, req.Auth_extract_times)
+	err = h.svc.Init_auth_times(ctx, req.Email, AuthHideTimes, AuthExtractTimes)
 	if err != nil {
-		ctx.String(http.StatusOK, "失败！")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.String(http.StatusOK, "账号不存在")
+		} else {
+			ctx.String(http.StatusOK, "失败！")
+		}
 		return
 	}
 	ctx.String(http.StatusOK, "成功！")
