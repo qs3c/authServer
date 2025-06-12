@@ -43,6 +43,36 @@ func (repo *UserRepository) ModifyAuthTimesByEmail(ctx context.Context, email st
 	}
 	return nil
 }
+
+func (repo *UserRepository) HideMinusOneByUserId(ctx context.Context, userId int64) (int, error) {
+
+	updatedTimes, err := repo.dao.HideMinusOneByUserId(ctx, userId)
+	if err != nil {
+		return 0, err
+	}
+
+	return updatedTimes, nil
+}
+
+func (repo *UserRepository) ExtractMinusOneByUserId(ctx context.Context, userId int64) (int, error) {
+	updatedTimes, err := repo.dao.ExtractMinusOneByUserId(ctx, userId)
+	if err != nil {
+		return 0, err
+	}
+
+	return updatedTimes, nil
+}
+
+func (repo *UserRepository) CheckByUserId(ctx context.Context, userId int64) (int, int, error) {
+
+	hideRemainTimes, extractRemainTimes, err := repo.dao.ExtractCheckByUserId(ctx, userId)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return hideRemainTimes, extractRemainTimes, nil
+}
+
 func (repo *UserRepository) toDomain(u dao.User) domain.User {
 	return domain.User{
 		Id:       u.Id,

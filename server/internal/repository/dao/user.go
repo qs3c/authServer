@@ -3,6 +3,7 @@ package dao
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 	"time"
@@ -59,6 +60,78 @@ func (dao *UserDAO) ModifyAuthTimesByEmail(ctx context.Context, email string, au
 	}
 
 	return nil
+}
+
+func (dao *UserDAO) HideMinusOneByUserId(ctx context.Context, userId int64) (int, error) {
+
+	// 更新值
+	//result := dao.db.Raw("UPDATE users SET remain_hide_times = remain_hide_times - 1 WHERE id = ?", userId)
+
+	result := dao.db.WithContext(ctx).Table("users").Where("id = ?", userId).Update("remain_hide_times", gorm.Expr("remain_hide_times - ?", 1))
+
+	if result.Error != nil {
+		fmt.Println(result.Error.Error())
+		return 0, result.Error
+	}
+
+	// 查询值
+	var updatedTimes int
+	err := dao.db.WithContext(ctx).Raw("SELECT remain_hide_times FROM users WHERE id = ?", userId).Scan(&updatedTimes).Error
+	if err != nil {
+		return 0, err
+	}
+	return updatedTimes, nil
+}
+
+func (dao *UserDAO) ExtractMinusOneByUserId(ctx context.Context, userId int64) (int, error) {
+	// 更新值
+	//err := dao.db.WithContext(ctx).Raw("UPDATE users SET remain_extract_times = remain_hide_times - 1 WHERE id = ?", userId).Error
+
+	result := dao.db.WithContext(ctx).Table("users").Where("id = ?", userId).Update("remain_extract_times", gorm.Expr("remain_extract_times - ?", 1))
+
+	if result.Error != nil {
+		fmt.Println(result.Error.Error())
+		return 0, result.Error
+	}
+
+	// 查询值
+	var updatedTimes int
+	err := dao.db.WithContext(ctx).Raw("SELECT remain_extract_times FROM users WHERE id = ?", userId).Scan(&updatedTimes).Error
+	if err != nil {
+		return 0, err
+	}
+	return updatedTimes, nil
+}
+
+func (dao *UserDAO) HideCheckByUserId(ctx context.Context, userId int64) (int, error) {
+	var remainTimes int
+
+	// 使用原生SQL执行更新并返回更新后的值
+	err := dao.db.WithContext(ctx).Raw("SELECT remain_hide_times FROM users WHERE id = ?", userId).Scan(&remainTimes).Error
+
+	if err != nil {
+		return 0, err
+	}
+
+	return remainTimes, nil
+}
+
+func (dao *UserDAO) ExtractCheckByUserId(ctx context.Context, userId int64) (int, int, error) {
+	//var hideRemainTimes int
+	//var extractRemainTimes int
+	type UserRemains struct {
+		RemainHideTimes    int `gorm:"column:remain_hide_times"`
+		RemainExtractTimes int `gorm:"column:remain_extract_times"`
+	}
+	var r UserRemains
+	// 使用原生SQL执行更新并返回更新后的值
+	err := dao.db.WithContext(ctx).Raw("SELECT remain_hide_times,remain_extract_times FROM users WHERE id = ?", userId).Scan(&r).Error
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return r.RemainHideTimes, r.RemainExtractTimes, nil
 }
 
 type User struct {

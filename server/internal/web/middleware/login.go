@@ -17,10 +17,21 @@ func (m *LoginMiddlewareBuilder) CheckLogin() gin.HandlerFunc {
 			return
 		}
 		sess := sessions.Default(ctx)
-		if sess.Get("userId") == nil {
+		userId := sess.Get("userId")
+		if userId == nil {
 			// 中断，不要往后执行，也就是不要执行后面的业务逻辑
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
+		} else {
+			ctx.Set("userId", userId)
+			// 刷新时间
+			sess.Options(sessions.Options{
+				MaxAge: 300,
+			})
+			if err := sess.Save(); err != nil {
+				ctx.String(http.StatusOK, "sess save err")
+				return
+			}
 		}
 	}
 }

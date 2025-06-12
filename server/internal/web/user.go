@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	regexp "github.com/dlclark/regexp2"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"net/http"
@@ -45,10 +46,12 @@ func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
 	ug.POST("/login", h.Login)
 	// POST /users/init_auth_times
 	ug.POST("/init_auth_times", h.InitAuthTimes)
-	// GET /users/use_hide
-	ug.GET("/use_hide", h.UseHide)
-	// GET /users/use_hide
-	ug.GET("/use_extract", h.UseExtract)
+	// GET /users/check_times  路径参数 Params
+	//ug.GET("/check_times/:auth_type", h.CheckAuthTimes)
+	ug.GET("/check_times", h.CheckAuthTimes)
+	// GET /users/minus_one 请求参数 QueryParams
+	ug.GET("/minus_one", h.MinusOneAuthTimes)
+
 }
 
 func (h *UserHandler) SignUp(ctx *gin.Context) {
@@ -113,22 +116,23 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 	if err := ctx.Bind(&req); err != nil {
 		return
 	}
-	_, err := h.svc.Login(ctx, req.Email, req.Password)
+	u, err := h.svc.Login(ctx, req.Email, req.Password)
 
 	switch err {
 	case nil:
-		//sess := sessions.Default(ctx)
-		//sess.Set("userId", u.Id)
-		//sess.Options(sessions.Options{
-		//	// 十五分钟
-		//	MaxAge: 900,
-		//})
-		//err = sess.Save()
-		//if err != nil {
-		//	ctx.String(http.StatusOK, "系统错误")
-		//	return
-		//}
-		fmt.Println("here?")
+		// 登录成功了设置服务器的 session
+		sess := sessions.Default(ctx)
+		sess.Set("userId", u.Id)
+		sess.Options(sessions.Options{
+			// 十五分钟
+			MaxAge: 900,
+		})
+		err = sess.Save()
+		if err != nil {
+			ctx.String(http.StatusOK, "系统错误")
+			return
+		}
+
 		ctx.String(http.StatusOK, "登录成功")
 	case service.ErrInvalidUserOrPassword:
 		ctx.String(http.StatusOK, "用户名或者密码不对")
@@ -170,7 +174,7 @@ func (h *UserHandler) InitAuthTimes(ctx *gin.Context) {
 		return
 	}
 
-	err = h.svc.Init_auth_times(ctx, req.Email, AuthHideTimes, AuthExtractTimes)
+	err = h.svc.InitAuthTimes(ctx, req.Email, AuthHideTimes, AuthExtractTimes)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ctx.String(http.StatusOK, "账号不存在")
@@ -182,10 +186,62 @@ func (h *UserHandler) InitAuthTimes(ctx *gin.Context) {
 	ctx.String(http.StatusOK, "成功！")
 }
 
-func (h *UserHandler) UseHide(ctx *gin.Context) {
-	ctx.String(http.StatusOK, "这是 profile")
+func (h *UserHandler) CheckAuthTimes(ctx *gin.Context) {
+	//authType := ctx.Param("auth_type")
+
+	var userId int64
+	value, exist := ctx.Get("userId")
+	if !exist {
+		ctx.String(http.StatusOK, "获取用户信息失败！")
+		return
+	}
+	userId = value.(int64)
+
+	hideRemainTimes, extractRemainTimes, err := h.svc.CheckAuthTimes(ctx, userId)
+
+	if err != nil {
+		ctx.String(http.StatusOK, "<UNK>")
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"hideRemainTimes":    hideRemainTimes,
+		"extractRemainTimes": extractRemainTimes,
+	})
 }
 
-func (h *UserHandler) UseExtract(ctx *gin.Context) {
-	ctx.String(http.StatusOK, "这是 profile")
+func (h *UserHandler) MinusOneAuthTimes(ctx *gin.Context) {
+
+	authType := ctx.Query("auth_type")
+	fmt.Println("auth_type:", authType)
+
+	var AuthTypeBool bool
+	if authType == "h" {
+		AuthTypeBool = false
+	} else if authType == "e" {
+		AuthTypeBool = true
+	} else {
+		ctx.String(http.StatusOK, "h/e 类型异常！")
+		return
+	}
+
+	var userId int64
+	value, exist := ctx.Get("userId")
+	if !exist {
+		ctx.String(http.StatusOK, "获取用户信息失败！")
+		return
+	}
+	userId = value.(int64)
+
+	remainTimes, err := h.svc.MinusOneAuthTimes(ctx, userId, AuthTypeBool)
+
+	if err != nil {
+		ctx.String(http.StatusOK, "<UNK>")
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"remainTimes": remainTimes,
+	})
+	//ctx.String(http.StatusOK, "%d", strconv.Itoa(remainTimes))
 }

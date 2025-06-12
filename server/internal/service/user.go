@@ -5,6 +5,7 @@ import (
 	"authServer/server/internal/repository"
 	"context"
 	"errors"
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -48,7 +49,7 @@ func (svc *UserService) Login(ctx context.Context, email string, password string
 	return u, nil
 }
 
-func (svc *UserService) Init_auth_times(ctx context.Context, email string, auth_hide_times int, auth_extract_times int) error {
+func (svc *UserService) InitAuthTimes(ctx context.Context, email string, auth_hide_times int, auth_extract_times int) error {
 
 	// 根据 email 找到用户并修改次数记录
 	err := svc.repo.ModifyAuthTimesByEmail(ctx, email, auth_hide_times, auth_extract_times)
@@ -57,4 +58,31 @@ func (svc *UserService) Init_auth_times(ctx context.Context, email string, auth_
 	}
 	return nil
 
+}
+
+func (svc *UserService) CheckAuthTimes(ctx *gin.Context, userId int64) (int, int, error) {
+
+	hideRemainTimes, extractRemainTimes, err := svc.repo.CheckByUserId(ctx, userId)
+	if err != nil {
+		return 0, 0, err
+	}
+	return hideRemainTimes, extractRemainTimes, nil
+
+}
+
+func (svc *UserService) MinusOneAuthTimes(ctx *gin.Context, userId int64, authType bool) (int, error) {
+
+	if authType == false {
+		remainTimes, err := svc.repo.HideMinusOneByUserId(ctx, userId)
+		if err != nil {
+			return 0, err
+		}
+		return remainTimes, nil
+	} else {
+		remainTimes, err := svc.repo.ExtractMinusOneByUserId(ctx, userId)
+		if err != nil {
+			return 0, err
+		}
+		return remainTimes, nil
+	}
 }
